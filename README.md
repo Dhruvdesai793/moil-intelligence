@@ -1,12 +1,14 @@
 # MOIL Intelligence
 
-SIH 2026 application infrastructure: FastAPI + Streamlit + native PostgreSQL/PostGIS + Alembic + official GEE provider boundary.
+FastAPI + Streamlit exploration workspace with native PostgreSQL/PostGIS, Alembic, real bounded Earth Engine extraction and an API-only frontend.
 
-**Software integration only:** seeded sites, demo feature payloads, production and predictions are not validated MOIL/geological evidence. ML artifacts and training datasets/pipelines are not ready. Real satellite extraction is not implemented.
+Explore the approximate Sausar study area, inspect four sourced historical MOIL reference points, save candidates, extract environmental features, compare Sentinel-2 bands with a measured USGS pyrolusite spectrum, and export location details.
 
-## Setup
+**ML and prospectivity rankings remain deterministic demos. Satellite measurements do not establish manganese reserves.**
 
-Follow [native database setup](docs/DB.md) first; it covers initdb, role/database creation and privileged first PostGIS migration.
+## Run locally
+
+Follow [local setup](docs/LOCAL_SETUP.md) for native PostgreSQL, OAuth and configuration.
 
 ```bash
 cd backend
@@ -15,44 +17,23 @@ source .venv/bin/activate
 # fish: source .venv/bin/activate.fish
 pip install -e '.[frontend]'
 cp .env.example .env
-# Edit DATABASE_URL locally; GEE_ENABLED=false works without OAuth.
+# Configure DATABASE_URL and GEE_ENABLED locally; never commit credentials.
+earthengine authenticate
 alembic upgrade head
 python scripts/seed_db.py
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-API docs: http://127.0.0.1:8000/docs
+Second terminal from backend: `python scripts/extraction_worker.py`.
 
-Second terminal, from root:
+Third terminal from root: `backend/.venv/bin/streamlit run frontend/streamlit/app.py --server.address 127.0.0.1`.
 
-```bash
-MOIL_API_BASE_URL=http://127.0.0.1:8000 backend/.venv/bin/streamlit run frontend/streamlit/app.py
-```
+Dashboard: http://127.0.0.1:8501. API docs: http://127.0.0.1:8000/docs.
 
-Dashboard: http://127.0.0.1:8501
+Tests from backend: `pytest`. Live rollback-only DB tests: `pytest -m integration`.
 
-Optional GEE OAuth from backend:
+## Understand and contribute
 
-```bash
-.venv/bin/earthengine authenticate
-```
+Read [how it works](docs/HOW_THIS_PROJECT_WORKS.md), [ML/API contracts](docs/ML_CONTRACT.md), [local setup](docs/LOCAL_SETUP.md), and [research and data limits](docs/RESEARCH_AND_DATA.md).
 
-Accept the external browser yourself; enable GEE in .env and restart backend. Project secure-guru-473417-q2. No credentials belong in git.
-
-## Tests
-
-```bash
-cd backend
-.venv/bin/pytest
-.venv/bin/pytest -m integration
-```
-
-Ordinary tests need no live DB/GEE. Integration tests need migrated PostgreSQL/PostGIS; writes roll back.
-
-## Architecture and contribution
-
-Frontend -> FastAPI -> services -> repositories/providers/orchestrator -> PostgreSQL/PostGIS/GEE/stub adapters.
-
-Read [project guide](docs/HOW_THIS_PROJECT_WORKS.md), [backend](docs/BACKEND.md), [frontend](docs/FRONTEND.md), [DB](docs/DB.md), [GEE](docs/GEE.md), [endpoint walkthroughs](docs/API_ENDPOINT_FLOW_REPORT.md) and [decisions](docs/ARCHITECTURE_DECISIONS.md).
-
-Routers delegate, services own rules, repositories own database queries, providers own external integration and PredictionOrchestrator owns adapter coordination. Frontend uses only HTTP. Feature demo fallback defaults off. Queued jobs have no worker.
+Frontend -> FastAPI -> services -> repositories/providers/orchestrator -> PostGIS/GEE/adapters. Predictions read stored features and never launch live GEE work. Trained models, labelled geology/operations datasets and scientific validation are still missing.

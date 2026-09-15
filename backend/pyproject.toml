@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-frontend = ["streamlit", "httpx", "pandas"]
+frontend = ["streamlit", "httpx", "pandas", "folium>=0.18,<1", "streamlit-folium>=0.23,<1", "plotly>=5,<7"]
 test = [
     "pytest",
     "httpx",
@@ -33,3 +33,6 @@ addopts = "-m 'not integration'"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["resources/*.json"]

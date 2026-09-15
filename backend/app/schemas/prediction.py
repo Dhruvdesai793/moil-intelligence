@@ -55,6 +55,7 @@ class ExplorationPrediction(Metadata):
     model_version: str
     data_timestamp: datetime | None = None
     feature_version: str = "placeholder-v1"
+    feature_id: str | None = None
     prediction_timestamp: datetime = Field(default_factory=utc_now)
     as_of: datetime
     requested_resolution_m: float | None = None

@@ -12,18 +12,27 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     database_url: str = Field(
-        default="postgresql+psycopg://moil:moil_dev_password@localhost:5432/moil_intelligence", repr=False)
+        default="postgresql+psycopg://moil:moil_dev_password@localhost:5432/moil_intelligence",
+        repr=False,
+    )
     gee_enabled: bool = False
     gee_project_id: str = "secure-guru-473417-q2"
     gee_auth_method: str = "oauth"
     gee_allow_demo_features: bool = True
+    gee_timeout_seconds: int = 60
+    gee_min_valid_fraction: float = Field(default=0.6, ge=0, le=1)
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:8501", "http://127.0.0.1:8501"])
+        default_factory=lambda: ["http://localhost:8501", "http://127.0.0.1:8501"]
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_origins(cls, value):
-        return [item.strip() for item in value.split(",") if item.strip()] if isinstance(value, str) else value
+        return (
+            [item.strip() for item in value.split(",") if item.strip()]
+            if isinstance(value, str)
+            else value
+        )
 
 
 @lru_cache

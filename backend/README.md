@@ -1,21 +1,11 @@
-# Backend Local Development
+# Backend
 
-From backend:
+Run commands and native PostgreSQL/GEE configuration: [local setup](../docs/LOCAL_SETUP.md).
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-# fish: source .venv/bin/activate.fish
-pip install -e '.[frontend]'
-cp .env.example .env
-# Configure native DB according to ../docs/DB.md.
-alembic upgrade head
-python scripts/seed_db.py
-uvicorn app.main:app --reload
-pytest
-pytest -m integration
-```
+Request flow and directory ownership: [project guide](../docs/HOW_THIS_PROJECT_WORKS.md).
 
-Optional OAuth: earthengine authenticate; accept external browser. Configure GEE_ENABLED=true only after setup. Missing GEE never blocks startup. DB-backed endpoints require a migrated database and otherwise return a structured 503.
+Every API route and the model handoff: [ML contract](../docs/ML_CONTRACT.md).
 
-See ../docs/BACKEND.md for responsibilities/dependencies, ../docs/DB.md for PostGIS privilege/geometry rules, ../docs/GEE.md for provider behavior and ../docs/API_ENDPOINT_FLOW_REPORT.md for endpoint walkthroughs.
+Scientific data provenance and limitations: [research](../docs/RESEARCH_AND_DATA.md).
+
+From this directory, install `pip install -e '.[frontend]'`, run `alembic upgrade head`, seed with `python scripts/seed_db.py`, start `uvicorn app.main:app --reload`, and run the separate `python scripts/extraction_worker.py`. Ordinary `pytest` does not require live GEE/PostgreSQL. `pytest -m integration` checks native DB persistence with rolled-back writes.

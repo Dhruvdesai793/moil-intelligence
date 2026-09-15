@@ -2,15 +2,43 @@ from app.schemas.exploration import Site
 
 
 class FakeExplorationRepository:
+    def __init__(self):
+        self.saved = []
+
     def list_sites(self):
         return [
-            Site(id="zone_a", name="Demo A", status="ACTIVE", latitude=21.123, longitude=79.123),
-            Site(id="zone_b", name="Demo B", status="INACTIVE", latitude=21.456, longitude=79.456),
-            Site(id="zone_c", name="Demo C", status="ACTIVE", latitude=21.3, longitude=79.3),
-        ]
+            Site(
+                id="zone_a",
+                name="Demo A",
+                status="ACTIVE",
+                latitude=21.123,
+                longitude=79.123,
+            ),
+            Site(
+                id="zone_b",
+                name="Demo B",
+                status="INACTIVE",
+                latitude=21.456,
+                longitude=79.456,
+            ),
+            Site(
+                id="zone_c",
+                name="Demo C",
+                status="ACTIVE",
+                latitude=21.3,
+                longitude=79.3,
+            ),
+        ] + self.saved
 
     def get(self, site_id):
         return next((site for site in self.list_sites() if site.id == site_id), None)
+
+    def create(self, site_id, request):
+        site = Site(
+            id=site_id, status="ACTIVE", origin="user_location", **request.model_dump()
+        )
+        self.saved.append(site)
+        return site
 
 
 class FakeRecords:
@@ -25,6 +53,9 @@ class FakeRecords:
     def get(self, key):
         return self.records.get(key)
 
+    def create(self, record):
+        return self.save(record)
+
 
 class FakeFeatures:
     def __init__(self):
@@ -35,9 +66,15 @@ class FakeFeatures:
         return bundle
 
     def get_latest_for_site(self, site_id, as_of=None):
-        records = [r for r in self.records if r.site_id == site_id and
-                   (as_of is None or r.extracted_at <= as_of)]
+        records = [
+            r
+            for r in self.records
+            if r.site_id == site_id and (as_of is None or r.extracted_at <= as_of)
+        ]
         return records[-1] if records else None
 
     def list_for_site(self, site_id):
         return [r for r in self.records if r.site_id == site_id]
+
+    def get(self, feature_id):
+        return next((r for r in self.records if r.feature_id == feature_id), None)

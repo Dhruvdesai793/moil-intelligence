@@ -1,49 +1,64 @@
 # How MOIL Intelligence Works
 
-This milestone integrates the application infrastructure. It does not complete the audit's scientifically meaningful first-model milestone. Real mining datasets, baseline comparisons, spatial/temporal validation and trained artifacts remain gates owned by the data/ML work.
+This is an exploration and mine-planning software prototype, not a validated reserve estimator.
 
-## Full flow
+## What you can do
 
-```text
-Data -> validation/ingestion -> temporal/spatial alignment -> feature engineering
-  -> PostgreSQL/PostGIS materialized features -> specialist models
-  -> PredictionOrchestrator -> decision/recommendation -> FastAPI
-  -> Streamlit -> human decision -> actual outcomes -> evaluation/retraining
-```
+Use the Sausar study map to view four sourced historical MOIL mine reference points, save exploration candidates, queue satellite extraction, inspect source quality and spectra, run a prediction demo, and export candidate details or rankings. The study rectangle is an approximate planning envelope, not an official geological boundary. Ranking halos are discrete demo scores, not a scientifically validated continuous prospectivity raster.
 
-Today the database, API, dashboard and persistence are real. Sites/production/features used in demos are explicit software fixtures. GEE has real lazy authentication and connectivity checks, but no satellite feature extraction yet. Models are deterministic stubs. Outcomes, ingestion QA and scientific retraining are not implemented.
+## The pipeline
 
-## Follow one request
+Streamlit -> FastAPI -> services -> repositories / providers / orchestrator -> PostgreSQL/PostGIS / Earth Engine / model adapters.
 
-When you select a site, Streamlit sends GET /api/v1/exploration/sites. FastAPI creates the dependencies, ExplorationService applies the ACTIVE rule, and ExplorationRepository reads PostgreSQL. Pydantic serializes the response. Streamlit never sees a database session.
+For extraction:
+1. Streamlit POSTs a location and date interval to /api/v1/features/extract.
+2. ExtractionService validates the saved location and persists a queued job; the API returns 202.
+3. The separate local extraction worker claims the queued job using a row lock.
+4. FeatureService resolves coordinates and asks GEEProvider for environmental measurements.
+5. FeatureRepository stores the typed bundle, source quality and spectral samples in PostGIS.
+6. Streamlit polls /jobs/{id}, then reads the stored feature bundle.
 
-Feature extraction is separate. The service resolves a site, asks GEEProvider for an extraction result, and stores an explicitly allowed demo bundle or reports unavailable/no features. A future batch provider will return real, validated provenance through the same boundary.
+For prediction:
+1. Streamlit POSTs a site_id to /predictions/exploration.
+2. PredictionOrchestrator resolves the candidate and reads already-materialized features.
+3. ModelInput carries coordinates, features, quality, versions and missing-input warnings to the registered adapters.
+4. Stub adapters return deterministic integration outputs. They do not interpret mineral spectra.
+5. PredictionRepository saves the normalized, explicitly stub result.
 
-Prediction resolves the origin and reads materialized features before calling adapters internally. It saves a normalized prediction with versions/timestamps and stub warnings. The frontend gets one response and does not coordinate models. Grade/optional adapter failures withhold outputs. Decisions are human-review suggestions based on demo state.
+Regular predictions never start a live GEE computation. The frontend never calls a model, database or GEE directly. Real ML preprocessing belongs between the feature bundle and the validated specialist adapter, not in routers.
 
-Jobs demonstrate persistent polling contracts. Immediate jobs execute synchronously; queued jobs have no worker and never advance. Adding a worker later is an implementation milestone, not merely an environment switch.
+## Real versus placeholder
 
-## Learn and replicate
+Real: HTTP application, native PostgreSQL/PostGIS, Alembic, persistence, development GEE OAuth, bounded satellite extraction, public-domain measured USGS reference spectrum, CSV/text exports.
 
-1. Read schemas/exploration.py and api/routes/exploration.py: identify HTTP input/output.
-2. Read ExplorationService: identify the ACTIVE rule and missing-site error.
-3. Read ExplorationRepository and models/exploration.py: trace SELECT to schema.
-4. Read api/dependencies.py and db/session.py: trace session sharing and transaction boundaries.
-5. Follow FeatureService/provider/repository: distinguish external integration from persistence.
-6. Follow PredictionOrchestrator and ML registry: understand stable outputs and partial failure.
-7. Read tests/fakes.py and test_prototype.py: reproduce behavior without infrastructure.
-8. Rebuild a small independent catalog endpoint using schema -> repository -> service -> DI -> route -> tests -> Streamlit HTTP form.
+Unvalidated: saved candidates, seeded software fixtures, geological interpretation of remote-sensing features, ML models, grade, production forecasts, recommendations and ranking scores. A real satellite measurement is not a real manganese prediction. No ground-truth training pipeline, reserve classification or calibrated uncertainty exists.
 
-FastAPI/Pydantic/SQL syntax is enough to begin. The next concepts are responsibility boundaries, dependency injection, transactions, migrations, provenance and failure contracts. Learn them by following an existing request rather than memorizing every file.
+## How to learn and contribute
 
-## Contributor boundaries
+Start with one request, not the whole repository. Trace GET /exploration/sites through api/router.py, api/routes/exploration.py, api/dependencies.py, services/exploration_service.py and repositories/exploration.py into models/exploration.py. Compare schemas/exploration.py with Swagger's response. ACTIVE filtering lives in the service so the business rule remains visible.
 
-Backend contributors own API schemas, routes, explicit DI, services, persistence and provider coordination. Frontend contributors own HTTP-backed views and truthful warnings. Data contributors must provide versioned ingestion contracts, rejected rows, observation timestamps and feature definitions. ML contributors must provide target/as-of definitions, reproducible preprocessing/artifacts, baseline and held-out validation before changing adapters to real models.
+Then follow POST /features/extract through ExtractionService, scripts/extraction_worker.py, FeatureService, GEEProvider and FeatureRepository. Finally follow PredictionOrchestrator and the typed model input contract.
 
-Read BACKEND.md for files, DB.md for native setup, GEE.md for OAuth, FRONTEND.md for UI and API_ENDPOINT_FLOW_REPORT.md for each endpoint. Do not put business/SQL/GEE logic in routes or bypass the orchestrator from frontend.
+To replicate this project, build in that same order: schema -> repository -> service -> injected dependency -> route -> test -> HTTP frontend. Start with fakes, then replace persistence, then add a provider behind an explicit boundary.
 
-## Local workflow
+## Directory ownership
 
-Install backend plus frontend extra, configure ignored backend/.env, prepare native PostgreSQL, run Alembic and seed fixtures. Authenticate GEE manually only if enabled. Start FastAPI from backend and Streamlit from root. Run pytest, then explicit integration tests, review git diff and commit only intended files.
+- backend/app/api: thin HTTP routes and the explicit dependency graph.
+- backend/app/core: configuration, safe errors and request logging.
+- backend/app/db and models: session lifecycle and spatial/JSONB tables.
+- backend/app/repositories: persistence only; no external integration or HTTP exceptions.
+- backend/app/providers: Earth Engine and weather integration boundaries.
+- backend/app/services: application rules, extraction coordination, ranking, exports and prediction orchestration.
+- backend/app/ml: lightweight specialist adapters and registry; trained artifacts are still absent.
+- backend/app/schemas: stable Pydantic contracts, including the model handoff.
+- backend/scripts and alembic: seed, extraction worker, reference downloader and versioned schema changes.
+- backend/tests: isolated contract/architecture tests and rollback-only database integration tests.
+- frontend/streamlit: API-only map, candidate workspace, spectra, exports and operational demo views.
+- data and notebooks: future raw/processed datasets and reproducible scientific investigation; not a production feature source yet.
+- docs: these four focused guides. Read ML_CONTRACT before integrating models.
 
-Never present fixture ranking scores as geological probabilities, confidence, reserves or validated mining recommendations. Store/display WGS84; metre-based operations require metric projection. Materialize satellite features ahead of real inference.
+## Remaining milestones
+
+Obtain licensed geology, structural evidence, boreholes/assays and historical operational labels. Define preprocessing and feature versioning with the ML team. Add spatially blocked exploration validation, chronological production validation, uncertainty calibration and human-reviewed recommendations. Only then replace demo rankings with scientifically supported outputs and build a validated prospectivity raster.
+
+Before deployment: production identity/access controls, service-account GEE authentication, quotas, retry/recovery policy and operational monitoring. Development OAuth and this local single-process worker are not a production deployment design.
