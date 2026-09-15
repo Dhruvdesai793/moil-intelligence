@@ -1,0 +1,27 @@
+[project]
+name = "moil-intelligence-backend"
+version = "0.1.0"
+description = "FastAPI backend for the MOIL Intelligence SIH 2026 project."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "pytest",
+    "httpx",
+]
+
+[project.optional-dependencies]
+frontend = ["streamlit", "httpx", "pandas"]
+test = [
+    "pytest",
+    "httpx",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
