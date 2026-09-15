@@ -1,92 +1,58 @@
 # MOIL Intelligence
 
-SIH 2026 FastAPI + Streamlit application prototype, guided by SIH26009 Technical Audit v3.4.
+SIH 2026 application infrastructure: FastAPI + Streamlit + native PostgreSQL/PostGIS + Alembic + official GEE provider boundary.
 
-The HTTP application flow is implemented and tested. Scientific models, validated feature tables and real MOIL data are not available. All prediction-like outputs are explicitly demo/stub results, never evidence for geological or operational decisions.
+**Software integration only:** seeded sites, demo feature payloads, production and predictions are not validated MOIL/geological evidence. ML artifacts and training datasets/pipelines are not ready. Real satellite extraction is not implemented.
 
-## Local workflow
+## Setup
 
-From the repository root:
+Follow [native database setup](docs/DB.md) first; it covers initdb, role/database creation and privileged first PostGIS migration.
 
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[frontend]"
+# fish: source .venv/bin/activate.fish
+pip install -e '.[frontend]'
+cp .env.example .env
+# Edit DATABASE_URL locally; GEE_ENABLED=false works without OAuth.
+alembic upgrade head
+python scripts/seed_db.py
 uvicorn app.main:app --reload
 ```
 
-For fish replace activation with `source .venv/bin/activate.fish`.
-Backend-only installation is `pip install -e .`; pytest and HTTP testing dependencies are included.
-Open http://127.0.0.1:8000/docs. No database, GEE credentials or model artifacts are needed.
+API docs: http://127.0.0.1:8000/docs
 
-In another terminal, from the repository root:
+Second terminal, from root:
 
 ```bash
-source backend/.venv/bin/activate
-streamlit run frontend/streamlit/app.py --server.address 127.0.0.1
+MOIL_API_BASE_URL=http://127.0.0.1:8000 backend/.venv/bin/streamlit run frontend/streamlit/app.py
 ```
 
-Open http://127.0.0.1:8501. From `frontend/streamlit` instead use `streamlit run app.py` with the same environment activated.
-Set `MOIL_BACKEND_URL` in the frontend process environment to change the default http://127.0.0.1:8000.
-The frontend reads environment variables directly; it does not automatically load the backend .env.
+Dashboard: http://127.0.0.1:8501
 
-Tests:
+Optional GEE OAuth from backend:
+
+```bash
+.venv/bin/earthengine authenticate
+```
+
+Accept the external browser yourself; enable GEE in .env and restart backend. Project secure-guru-473417-q2. No credentials belong in git.
+
+## Tests
 
 ```bash
 cd backend
-source .venv/bin/activate
-pytest
+.venv/bin/pytest
+.venv/bin/pytest -m integration
 ```
 
-Backend settings load `backend/.env` when started in backend/. Copy the values from `backend/.env.example` only when needed. Keep .env and credentials untracked.
+Ordinary tests need no live DB/GEE. Integration tests need migrated PostgreSQL/PostGIS; writes roll back.
 
-## Current API
+## Architecture and contribution
 
-All paths below are under `/api/v1`. Swagger/OpenAPI at `/docs` is the executable contract.
+Frontend -> FastAPI -> services -> repositories/providers/orchestrator -> PostgreSQL/PostGIS/GEE/stub adapters.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | /health | Runtime status, service, version |
-| GET | /exploration/sites | Active demo sites, each with metadata |
-| GET | /exploration/sites/{site_id} | Site record or structured 404 |
-| GET | /exploration/sites/{site_id}/summary | Site, feature availability, model readiness |
-| POST | /predictions/exploration | Backend-orchestrated stub ranking result |
-| GET | /production/overview | Stub target, forecast, risk, provenance |
-| GET | /decision/recommendations | Rule-supported demo recommendations |
-| POST | /jobs | Create immediate or queued job; HTTP 201 |
-| GET | /jobs/{job_id} | Poll in-memory status or 404 |
+Read [project guide](docs/HOW_THIS_PROJECT_WORKS.md), [backend](docs/BACKEND.md), [frontend](docs/FRONTEND.md), [DB](docs/DB.md), [GEE](docs/GEE.md), [endpoint walkthroughs](docs/API_ENDPOINT_FLOW_REPORT.md) and [decisions](docs/ARCHITECTURE_DECISIONS.md).
 
-Prediction input is exactly one of `site_id` or `coordinates: {latitude, longitude}`, with optional positive `requested_resolution_m` and timezone-aware, non-future `as_of`. Coordinates are WGS84; polygon AOIs and spatial calculations are deferred.
-Requested resolution is recorded but no raster inference occurs; `effective_resolution_m` is null.
-
-Example:
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/v1/predictions/exploration \
-  -H 'Content-Type: application/json' \
-  -d '{"site_id":"zone_a","requested_resolution_m":30}'
-```
-
-Prediction responses carry `is_stub`, `source`, `generated_at`, `message`, `warning`, `model_version`, `data_timestamp`, `feature_version`, `prediction_timestamp`, `as_of`, `uncertainty`, and model-level readiness.
-A demo ranking score is not a mineral probability. Missing calibrated intervals and actual data timestamps are null.
-Site metadata is nested; prediction, production, recommendation and job metadata is at the top level.
-
-Errors use `{"error":{"code":"not_found|validation_error|internal_error|http_error","message":"..."}}`.
-Queued jobs have no worker and never advance. Immediate jobs run the same prediction orchestrator synchronously.
-Jobs/predictions are process-local, reset on restart/reload, and retain at most 1000 records each. Use one process locally.
-
-## Architecture and contributions
-
-Frontend -> FastAPI -> services -> repositories/providers/orchestrator -> specialist adapters.
-DecisionService consumes application state; all model execution is coordinated by PredictionOrchestrator.
-The intended full flow is Data -> Validation/Ingestion -> temporal/spatial alignment -> Features -> Models -> Orchestrator -> Decisions -> API -> Frontend -> Human action -> Actual outcomes -> Validation/retraining.
-
-Read `docs/HOW_THIS_PROJECT_WORKS.md` for orchestration, `docs/BACKEND.md` and `docs/FRONTEND.md` for file ownership, `docs/DATA.md` for data contracts, and `docs/ARCHITECTURE_DECISIONS.md` for staged choices.
-Directory guides stay in docs and cover nested directories.
-
-Real: request validation, HTTP routes, service separation, deterministic fixtures, error handling, logging, polling records, frontend interactions and tests.
-Stubbed: sites, production, prospectivity, recommendations and provider availability. Grade is withheld.
-Deferred: real ingestion/features, GEE batch exports, PostGIS, validated models, actual outcome capture, retraining, workers and deployment infrastructure.
-
-Add one scoped change with behavioral tests. Do not put business logic or DB/GEE calls in routers. Do not bypass the orchestrator from the frontend. Do not present stub predictions as real scientific output.
+Routers delegate, services own rules, repositories own database queries, providers own external integration and PredictionOrchestrator owns adapter coordination. Frontend uses only HTTP. Feature demo fallback defaults off. Queued jobs have no worker.

@@ -11,3 +11,9 @@ router = APIRouter(prefix="/predictions", tags=["Predictions"])
 def predict(request: ExplorationPredictionRequest,
             service: PredictionOrchestrator = Depends(get_orchestrator)) -> ExplorationPrediction:
     return service.exploration_prediction(request)
+
+
+@router.get("/{prediction_id}", response_model=ExplorationPrediction)
+def get_prediction(prediction_id: str,
+                   service: PredictionOrchestrator = Depends(get_orchestrator)):
+    return service.get_prediction(prediction_id)

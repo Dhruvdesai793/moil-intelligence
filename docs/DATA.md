@@ -1,28 +1,9 @@
-# Data Directory
+# Data
 
-## Nested directories
+data/raw and data/processed are reserved and ignored except .gitkeep. data/samples is for small nonsensitive software fixtures. Never store real MOIL confidential data or credentials in public git.
 
-data/raw/ stores future original inputs; .gitkeep retains the empty directory. Contents are ignored by Git.
-data/processed/ stores future validated/materialized features; .gitkeep retains it and generated contents are ignored.
-data/samples/ is reserved for deliberately non-confidential sample inputs; .gitkeep retains it.
-Current runtime sample sites and production targets live in typed backend repositories, not these directories.
+Current demo sites are seeded by backend/scripts/seed_db.py into exploration_sites. Demo features are generic contract fixtures stored in site_features only after explicit fallback permission. They are not satellite observations, training labels or validated geology.
 
-## What contributors can add
+Feature payloads preserve origin, observation date window, extraction timestamp, feature_version/source/is_stub/readiness/warning. Predictions retain the selected feature version and extraction timestamp. Historical queries exclude bundles materialized after as_of.
 
-Start with a versioned schema, explicit target, units, WGS84 location and prediction cutoff.
-Define required/optional columns and rejected-row reporting; do not silently coerce invalid records.
-Add genuine dataset/product IDs, acquisition timestamps, AOI, processing/feature version and source resolutions.
-Keep environmental variables separate: rainfall, coarse soil moisture, NDVI and LST must be available at prediction time.
-Separate forecast-at-origin rainfall from observed/reanalysis history.
-Preserve label_source: positive, true_negative and background. Spatial splits and occurrence-derived features must be fold-safe.
-Use local projected metric CRS for buffers/distances; never treat degrees as metres.
-Materialize GEE batch outputs before prediction; record missing/stale features as unavailable.
-MOIL operational history is necessary for real production backtests; synthetic data validates software only.
-
-## Future integration and evidence gates
-
-Replace repositories with PostGIS access after database and schema smoke tests.
-The notebook signal check, measured baseline and meaningful spatial validation must precede claims of a real exploration model.
-Production needs chronological holdout and empirically checked intervals.
-No real data, extraction, ingestion engine, persistence or retraining exists in this prototype.
-Never commit private mine data, credentials or raw satellite archives. Public samples must identify themselves as examples.
+Contributors should implement versioned validated ingestion contracts, rejected-row reports, source provenance, ground truth formats and reproducible feature QA before scientific modeling. WGS84 is storage/display CRS; metric calculations require projection. Follow audit signal/baseline/holdout gates before claiming usefulness.

@@ -11,6 +11,13 @@ __pycache__/
 build/
 dist/
 .DS_Store
+.config/earthengine/
+credentials
+credentials.json
+*oauth*token*.json
+*service*account*.json
+*.pem
+*.key
 data/raw/*
 data/processed/*
 !data/raw/.gitkeep

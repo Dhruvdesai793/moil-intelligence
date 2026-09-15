@@ -12,6 +12,10 @@ class Readiness(StrEnum):
     STUB = "stub"
     NOT_CONFIGURED = "not_configured"
     UNAVAILABLE = "unavailable"
+    OK = "ok"
+    AUTH_REQUIRED = "auth_required"
+    DEGRADED = "degraded"
+    NOT_IMPLEMENTED = "not_implemented"
 
 
 class Metadata(BaseModel):
@@ -19,13 +23,18 @@ class Metadata(BaseModel):
     is_stub: bool = True
     generated_at: datetime = Field(default_factory=utc_now)
     message: str = "Demo only; not scientifically validated."
-    warning: str | None = "Real data, GEE and model integration pending."
+    warning: str | None = "Real satellite extraction, validated data and trained models are pending."
 
 
 class HealthResponse(BaseModel):
     status: str = "ok"
     service: str = "MOIL Intelligence API"
     version: str = "0.1.0"
+    environment: str = "development"
+    database: str = "unavailable"
+    postgis: str = "unavailable"
+    gee: str = "not_configured"
+    model_registry: str = "stub"
 
 
 class ErrorDetail(BaseModel):

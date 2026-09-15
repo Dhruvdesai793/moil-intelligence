@@ -16,6 +16,7 @@ class ExplorationPredictionRequest(BaseModel):
     coordinates: Coordinates | None = None
     requested_resolution_m: float | None = Field(default=None, gt=0)
     as_of: datetime | None = None
+    allow_demo_features: bool = False
 
     @model_validator(mode="after")
     def validate_origin(self):

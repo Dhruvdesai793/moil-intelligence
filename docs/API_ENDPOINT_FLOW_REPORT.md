@@ -1,532 +1,200 @@
 # API Endpoint Flow Report
 
-This report explains how the current MOIL Intelligence backend works endpoint by endpoint, and how to study it so you can rebuild the same style of application later. It is written for someone who knows FastAPI, Pydantic and SQL syntax, but is still learning how a backend codebase is organized.
+This report explains the current infrastructure milestone. Read it with schemas, routes and services open. API paths share /api/v1. Backend startup does not connect to PostgreSQL or initialize GEE; request dependencies create sessions lazily. Infrastructure status does not imply scientific validation.
 
-The current prototype is intentionally local-first. It runs without real ML models, Google Earth Engine, PostGIS or production datasets. Every prediction-like output is marked as stub/demo/placeholder so the application can prove the software flow without pretending to prove scientific results.
+## What remains
 
-## What Is Left
+Real trained adapters, reproducible ML preprocessing/training, validated geological/operational datasets, baselines, spatial holdout, chronological backtesting, calibrated intervals and actual-outcome evaluation remain absent. Real satellite batch extraction is also deliberately not implemented yet: the provider signature, authentication and persistence boundary are ready. Queued jobs need a future worker. Auth/access control remains a later deployment requirement.
 
-The project is runnable now, but these pieces are still future work:
+## Pattern you can replicate
 
-| Area | Current state | What remains |
+1. Schema describes legal input and normalized output.
+2. Router receives a schema and dependency-injected service.
+3. Service applies business rules and coordinates repositories/providers.
+4. Repository executes SQL and returns Pydantic contracts.
+5. Provider talks to an external system and reports availability honestly.
+6. Orchestrator coordinates model adapters and saves one normalized prediction.
+7. Request session commits after successful service completion; exceptions roll back.
+8. Frontend calls HTTP and renders status, output and provenance separately.
+
+Start by rebuilding a catalog list/detail endpoint. Then add persistence and a migration. Then add a provider boundary returning unavailable. Finally connect an HTTP form. These steps teach backend design beyond FastAPI syntax.
+
+## Endpoint map
+
+| Endpoint | Service | Storage / integration |
 | --- | --- | --- |
-| Real exploration data | In-memory demo sites | Replace repository fixtures with validated site/AOI data from PostGIS or curated files. |
-| GEE features | Provider stubs return `not_configured` | Add batch extraction/materialization pipeline, feature timestamps and provenance. |
-| PostGIS | No database required | Add database models, migrations, spatial indexes and repository implementations. |
-| ML models | Deterministic stub adapters | Register trained adapters only after validation, calibration and provenance checks. |
-| Production forecasting | Software fixture | Connect real production history, chronological validation and uncertainty calibration. |
-| Decision engine | Simple demo rules | Add validated decision policies, human approval workflow and evidence tracking. |
-| Jobs | In-memory records only | Add durable job storage and a real worker later, only when long-running extraction/training exists. |
-| Authentication | Not implemented | Add only after prototype contracts stabilize. |
-| Deployment | Local dev only | Add deployment packaging after backend/frontend contracts are stable. |
+| GET /health | HealthService | guarded DB/PostGIS checks, GEE availability, registry |
+| GET /exploration/sites | ExplorationService | ExplorationRepository |
+| GET /exploration/sites/{site_id} | ExplorationService | ExplorationRepository |
+| GET /exploration/sites/{site_id}/summary | ExplorationService | repository + GEE/weather/registry |
+| GET /features/sites/{site_id}/availability | FeatureService | GEEProvider + FeatureRepository |
+| GET /features/sites/{site_id} | FeatureService | FeatureRepository |
+| POST /features/extract | FeatureService | GEE boundary + FeatureRepository |
+| POST /predictions/exploration | PredictionOrchestrator | features + stub adapters + PredictionRepository |
+| GET /predictions/{prediction_id} | PredictionOrchestrator | PredictionRepository |
+| GET /production/overview | ProductionService | demo target + stub production adapter |
+| GET /decision/recommendations | DecisionService | production/exploration demo state |
+| POST /jobs | JobService | JobRepository + optional synchronous prediction |
+| GET /jobs/{job_id} | JobService | JobRepository |
 
-The most important unfinished scientific work is validation. Real model outputs should not enter the user interface until they have data lineage, training/evaluation dates, uncertainty, known limits and clear evidence status.
+## GET /api/v1/health
 
-## How To Learn This Codebase
+Route -> get_health -> HealthService.check.
 
-Study the backend in this order:
+The service calls SELECT 1 and SELECT PostGIS_Version() inside a guarded connection, then asks GEEProvider for availability and inspects registered adapters. Returns HTTP 200 even if DB/GEE unavailable, with status, service, version, environment, database, postgis, gee and model_registry.
 
-1. Start with [main.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/main.py). This is where the FastAPI app is created, middleware is attached, exception handlers are registered and the `/api/v1` router is included.
-2. Open [router.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/router.py). This is the API table of contents. It includes health, exploration, predictions, production, decision and jobs routes.
-3. Pick one route file, for example [exploration.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/exploration.py). Notice that the route does not contain business logic. It accepts input, asks FastAPI for a service dependency and returns a Pydantic response model.
-4. Follow the service dependency into [dependencies.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/dependencies.py). This file wires repositories, services, the model registry and the prediction orchestrator together.
-5. Follow the route into the service, such as [exploration_service.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/exploration_service.py). Services hold business rules such as filtering active sites or raising a domain-level `NotFoundError`.
-6. Follow the service into repositories, such as [exploration.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/repositories/exploration.py). Repositories own data access. Today they return in-memory demo objects; later they can query PostGIS without changing route code.
-7. For prediction endpoints, follow the service into [prediction_orchestrator.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/prediction_orchestrator.py), then into [registry.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/ml/registry.py). The orchestrator coordinates models; the frontend never calls models directly.
-8. Read the schema files under [schemas](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/schemas). These files define the public contract. If a frontend page receives a response, its shape should be explainable by one of these schemas.
-9. Finally, read [test_prototype.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/tests/test_prototype.py). Tests show the behavior the project promises to keep stable.
+Overall status is degraded if DB/PostGIS fail or enabled GEE is unavailable. Disabled GEE is an intentional local configuration. The registry status is stub, not a training/validation success. Health does not verify every table or scientific dataset.
 
-A good rule while learning: when you see an endpoint, ask four questions:
-
-| Question | Where to look |
-| --- | --- |
-| What URL and HTTP method does it expose? | `backend/app/api/routes/*.py` |
-| What request/response shape does it promise? | `backend/app/schemas/*.py` |
-| What business decision does it make? | `backend/app/services/*.py` |
-| Where does data/model output come from? | `backend/app/repositories`, `backend/app/ml`, `backend/app/providers` |
-
-## Backend Layer Pattern
-
-Every endpoint should keep this flow:
-
-```text
-HTTP request
--> FastAPI route
--> Pydantic request validation
--> dependency-injected service
--> repository/provider/orchestrator
--> Pydantic response model
--> JSON response
-```
-
-Do not put business logic in route files. Route files should be boring in the best possible way. They are the door, not the brain.
-
-Do not put FastAPI imports in repositories. Repositories should be replaceable by database-backed versions later.
-
-Do not let the frontend call ML adapters. The frontend talks only to FastAPI, and FastAPI talks to services.
-
-## App Startup And Cross-Cutting Behavior
-
-### `backend/app/main.py`
-
-This file creates the app:
-
-```python
-app = FastAPI(title="MOIL Intelligence API", version="0.1.0", lifespan=lifespan)
-```
-
-It also:
-
-- loads settings from `backend/app/core/config.py`
-- configures logging during startup
-- creates cached services once through `get_services()`
-- includes the root API router under `/api/v1`
-- adds CORS so local Streamlit can call the backend
-- adds request logging middleware
-- registers structured exception handlers
-
-The startup path deliberately does not require DB credentials, GEE authentication or ML artifacts. That makes the prototype usable before the scientific/data stack is ready.
-
-### Error Handling
-
-Domain-level missing records raise `NotFoundError`. The handler in [exceptions.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/core/exceptions.py) converts that into:
+Example:
 
 ```json
-{
-  "error": {
-    "code": "not_found",
-    "message": "..."
-  }
-}
+{"status":"degraded","service":"MOIL Intelligence API","version":"0.1.0",
+ "environment":"development","database":"unavailable","postgis":"unavailable",
+ "gee":"not_configured","model_registry":"stub"}
 ```
 
-Pydantic validation errors become `422 validation_error`. Unexpected errors become `500 internal_error` without leaking internals to the client.
+Contribute by adding bounded diagnostic checks to this service. Keep checks free of expensive extraction and avoid credentials in returned messages.
 
-## Current Endpoint Map
+## GET /api/v1/exploration/sites
 
-| Method | Path | Main route file | Main service | Purpose |
-| --- | --- | --- | --- | --- |
-| GET | `/api/v1/health` | `routes/health.py` | none | Confirm API is alive. |
-| GET | `/api/v1/exploration/sites` | `routes/exploration.py` | `ExplorationService` | Return active exploration sites. |
-| GET | `/api/v1/exploration/sites/{site_id}` | `routes/exploration.py` | `ExplorationService` | Return one site or 404. |
-| GET | `/api/v1/exploration/sites/{site_id}/summary` | `routes/exploration.py` | `ExplorationService` | Return site, feature availability and model readiness. |
-| POST | `/api/v1/predictions/exploration` | `routes/predictions.py` | `PredictionOrchestrator` | Create a stub exploration prediction. |
-| GET | `/api/v1/production/overview` | `routes/production.py` | `ProductionService` | Return stub production forecast overview. |
-| GET | `/api/v1/decision/recommendations` | `routes/decision.py` | `DecisionService` | Return stub recommendations. |
-| POST | `/api/v1/jobs` | `routes/jobs.py` | `JobService` | Create an in-memory demo job. |
-| GET | `/api/v1/jobs/{job_id}` | `routes/jobs.py` | `JobService` | Poll a demo job status. |
+Route -> get_exploration -> ExplorationService.get_sites -> ExplorationRepository.list_sites -> SQL SELECT -> Site schemas -> service ACTIVE filter.
 
-## Endpoint Walkthroughs
+Only ACTIVE records are returned. exp_001 and exp_002 are seeded ACTIVE; exp_003 UNDER_REVIEW and exp_004 INACTIVE do not appear. Filtering remains in the service so the business rule is visible. It can move into SQL for scale while keeping the same contract and tests.
 
-### GET `/api/v1/health`
+Each Site includes id/name/region/status/latitude/longitude and demo metadata. Native PostGIS holds a Point in SRID 4326. Listing does not infer ore potential or reserves.
 
-Purpose: confirm the backend is running.
+Contribute by adding tested query parameters/pagination once needed. Do not silently relax the ACTIVE rule.
 
-Route: [health.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/health.py)
+## GET /api/v1/exploration/sites/{site_id}
 
-Response schema: `HealthResponse` in [common.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/schemas/common.py)
+Route -> service.get_site -> repository.get -> session primary-key lookup.
 
-Flow:
+The service raises NotFoundError for a missing ID, translated centrally to HTTP 404. Detail lookup can return non-ACTIVE sites if explicitly requested; only the list enforces ACTIVE. Database failure produces 503, not an empty successful list.
 
-```text
-Client
--> GET /api/v1/health
--> health_check()
--> HealthResponse()
--> JSON
-```
+Contribute by extending Site/ORM contracts and migrations together. Keep lat/lon and geometry consistent during future write endpoints.
 
-Example response:
+## GET /api/v1/exploration/sites/{site_id}/summary
+
+Service resolves the site, asks injected GEE/weather providers for availability and reports registry readiness. Returns SiteSummary with site, feature_availability, model_readiness and metadata.
+
+No provider is constructed inside this method. Weather is not configured. Grade is unavailable/not configured. Prospectivity and production are stubs. Provider readiness is not proof of a feature dataset or model.
+
+Contribute by adding compact availability summaries, not heavyweight extraction inside a GET route.
+
+## GET /api/v1/features/sites/{site_id}/availability
+
+FeatureService validates the site, obtains provider status and reads latest persisted bundle. Returns site_id/provider/latest_feature. No extraction occurs.
+
+GEE disabled returns not_configured. OAuth missing returns auth_required. Project/network failures return unavailable. A stored demo bundle can exist even when GEE is disabled, so read both provider and bundle metadata.
+
+Contribute by adding source-specific support/timestamp metadata after feature definitions are frozen.
+
+## GET /api/v1/features/sites/{site_id}
+
+Service validates the site, then repository lists its bundles newest first. JSONB is deserialized into FeatureBundle models. Unknown site is 404; no bundles is an empty list.
+
+Contribute pagination and feature-version filtering when volume needs it. The current latest query is site-based, not a spatial nearest-feature lookup.
+
+## POST /api/v1/features/extract
+
+Example:
 
 ```json
-{
-  "status": "ok",
-  "service": "MOIL Intelligence API",
-  "version": "0.1.0"
-}
+{"site_id":"exp_001","start_date":"2025-01-01","end_date":"2025-02-01",
+ "allow_demo_fallback":false}
 ```
 
-Why it matters: frontend and deployment checks can use this before attempting richer API calls.
+Exactly one origin is required: site_id, coordinates, or aoi. Coordinates validate geographic ranges. Polygon AOIs validate closed rings and WGS84 positions; full topology validation is deferred. Dates require start < end <= today, end exclusive.
 
-Future improvement: include optional dependency readiness such as database, feature store and model registry status, but keep those as readiness fields rather than startup blockers.
+FeatureService resolves a site into coordinates, calls point/AOI provider method, attaches request provenance, and persists a successful bundle. GEEProvider lazily authenticates/checks connectivity but currently returns not_implemented or unavailable with **no measurements**.
 
-### GET `/api/v1/exploration/sites`
+Demo fallback only runs when allow_demo_fallback=true and GEE_ALLOW_DEMO_FEATURES=true. A generic integration_fixture_value payload is marked is_stub=true, source=demo_fixture, readiness=stub, and warning that it was not extracted from Earth Engine. The repository stores origin geometry and serialized contract in PostgreSQL.
 
-Purpose: return active exploration sites only.
+Unavailable/no-extraction responses have no feature_id or extracted_at and an empty payload. HTTP 200 is a successfully reported capability result, not extraction success. Clients must inspect readiness.
 
-Route: [exploration.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/exploration.py)
+Contribute real batch extraction through GEEProvider after feature definitions/QA are agreed. Do not generate fake NDVI values or issue long raster computations from serving requests.
 
-Service: [exploration_service.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/exploration_service.py)
+## POST /api/v1/predictions/exploration
 
-Repository: [exploration.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/repositories/exploration.py)
-
-Response schema: `list[Site]` in [exploration.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/schemas/exploration.py)
-
-Flow:
-
-```text
-Client
--> route get_sites()
--> Depends(get_exploration)
--> ExplorationService.get_sites()
--> ExplorationRepository.get_sites()
--> service filters status == ACTIVE
--> list[Site]
-```
-
-Important detail: the repository currently returns both active and inactive demo sites. The service applies the business rule that the endpoint should expose active sites only.
-
-Current frontend use: the Streamlit app fetches this list for exploration tables, map-friendly coordinates and site selectors.
-
-Future improvement: let the repository query active sites from PostGIS with filters such as concession, AOI, district, mineral target and data freshness. Keep the response schema stable unless the frontend truly needs new fields.
-
-### GET `/api/v1/exploration/sites/{site_id}`
-
-Purpose: return one exploration site by ID.
-
-Flow:
-
-```text
-Client
--> route get_site(site_id)
--> ExplorationService.get_site(site_id)
--> ExplorationRepository.get(site_id)
--> Site or NotFoundError
--> JSON 200 or structured 404
-```
-
-If the site is missing, the service raises:
-
-```python
-NotFoundError(f"Exploration site '{site_id}' was not found.")
-```
-
-The route does not build a 404 itself. This keeps HTTP formatting in the exception layer and business meaning in the service layer.
-
-Future improvement: support stable external IDs from MOIL systems or PostGIS primary keys. Avoid changing the URL shape unless the identity model changes.
-
-### GET `/api/v1/exploration/sites/{site_id}/summary`
-
-Purpose: show whether a site has enough data/model support for prediction.
-
-Flow:
-
-```text
-Client
--> route get_summary(site_id)
--> ExplorationService.summary(site_id)
--> get_site(site_id)
--> GEEProvider().availability()
--> WeatherProvider().availability()
--> ModelRegistry readiness check
--> SiteSummary
-```
-
-Response includes:
-
-- `site`: the selected site
-- `feature_availability`: provider stubs such as GEE and weather, currently `not_configured`
-- `model_readiness`: readiness of `prospectivity`, `grade` and `production`
-- `metadata`: `source`, `is_stub`, `generated_at`, `message`, `warning`
-
-Why it matters: this endpoint helps the frontend be honest. Before showing a prediction demo, the UI can show that real GEE/data/model integration is pending.
-
-Future improvement: replace provider stubs with real feature availability checks based on materialized features, not live expensive network calls in the route.
-
-### POST `/api/v1/predictions/exploration`
-
-Purpose: create a normalized exploration prediction contract while real ML is unavailable.
-
-Route: [predictions.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/predictions.py)
-
-Orchestrator: [prediction_orchestrator.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/prediction_orchestrator.py)
-
-ML registry: [registry.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/ml/registry.py)
-
-Request schema: `ExplorationPredictionRequest`
-
-Response schema: `ExplorationPrediction`
-
-Accepted input:
+Examples:
 
 ```json
-{
-  "site_id": "zone_a",
-  "requested_resolution_m": 10,
-  "as_of": "2026-01-01T00:00:00Z"
-}
+{"site_id":"exp_001","allow_demo_features":false}
 ```
-
-or:
 
 ```json
-{
-  "coordinates": {
-    "latitude": 21.0,
-    "longitude": 79.0
-  }
-}
+{"coordinates":{"latitude":21.1458,"longitude":79.0882}}
 ```
 
-Validation rules:
+Schema requires exactly one site or coordinates. Optional as_of must include timezone and cannot be future. requested_resolution_m must be positive; it is recorded, not executed.
 
-- provide exactly one of `site_id` or `coordinates`
-- latitude must be between `-90` and `90`
-- longitude must be between `-180` and `180`
-- `requested_resolution_m`, if supplied, must be positive
-- `as_of`, if supplied, must include a timezone
-- `as_of` cannot be in the future
+Orchestrator:
+1. Resolve site through ExplorationService.
+2. Select latest materialized site bundle with extracted_at <= as_of.
+3. If no bundle, optionally request explicit demo materialization for a current request. Historical requests never create fresh features.
+4. Pass coordinates to deterministic prospectivity/grade adapters through ModelRegistry.
+5. Normalize output with prediction ID, feature/model versions, timestamps, uncertainty, source and warnings.
+6. Save through PredictionRepository; request transaction commits.
+7. Return the same stable contract to Streamlit.
 
-Flow:
+Coordinate requests do not retrieve prior coordinate bundles yet. Stub adapters ignore unvalidated scientific payloads. Linking demonstrates software provenance, not real feature preprocessing.
 
-```text
-Client
--> route predict(request)
--> Pydantic validates request
--> PredictionOrchestrator.exploration_prediction(request)
--> if site_id exists, ExplorationService.get_site(site_id)
--> build ModelInput(coordinates)
--> ModelRegistry.run("prospectivity", inputs)
--> ModelRegistry.run("grade", inputs)
--> normalize result into ExplorationPrediction
--> PredictionRepository.save(result)
--> JSON response
-```
+Response is always is_stub=true, source=stub_models, score_type=demo_ranking_score, status=insufficient_real_data. Score is not calibrated probability. Grade may be null. Missing/broken adapters return unavailable results without crashing the core API. Uncertainty method is not_calibrated and intervals are null.
 
-Current model behavior:
+Contribute real adapters only with reproducible validated artifacts and an agreed feature contract. Preserve adapter failure handling, provenance and historical time rules.
 
-- `prospectivity` returns a deterministic stub score from coordinates
-- `grade` returns `None` with `not_configured`
-- missing/broken adapters return `unavailable` instead of crashing
+## GET /api/v1/predictions/{prediction_id}
 
-Important response fields:
+Orchestrator delegates read to PredictionRepository and raises NotFoundError if absent. Returns the exact stored normalized prediction from JSONB, preserving timestamps and warnings.
 
-| Field | Meaning |
-| --- | --- |
-| `prediction_id` | Unique ID for this generated response. |
-| `prospectivity_score` | Demo ranking score, not a scientific probability. |
-| `score_type` | Currently `demo_ranking_score`. |
-| `status` | `stub` or `insufficient_real_data`. |
-| `model_version` | Stub adapter version or `unavailable`. |
-| `data_timestamp` | `null` until real data exists. |
-| `feature_version` | Placeholder feature version. |
-| `prediction_timestamp` | When the API generated the response. |
-| `uncertainty` | Explicitly `not_calibrated`. |
-| `models` | Per-adapter status and warnings. |
-| `is_stub` | Always true in this prototype. |
+Contribute a history endpoint/pagination if needed; add access control before any sensitive operational deployment.
 
-Future improvement: the orchestrator should pull validated features by site/AOI, call registered trained adapters, attach model/data/feature provenance, and refuse to return scientific-looking scores when evidence is insufficient.
+## GET /api/v1/production/overview
 
-### GET `/api/v1/production/overview`
+ProductionService reads a demo target from ProductionRepository, asks orchestrator for the stub production adapter, computes HIGH/LOW/UNKNOWN risk and returns ProductionOverview.
 
-Purpose: return a demo production forecast overview for the frontend.
+The current target 1000, forecast 860 and shortfall probability are software fixtures. No real operational database table or forecast performance exists. Missing model returns null predicted/probability and UNKNOWN risk.
 
-Route: [production.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/production.py)
+Contribute operational ingestion only after schema/as-of semantics are agreed. Train/validate with chronological backtests; do not treat synthetic output as mine performance.
 
-Service: [production_service.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/production_service.py)
+## GET /api/v1/decision/recommendations
 
-Repository: [production.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/repositories/production.py)
+DecisionService combines production overview and active-site count into rule-based demo suggestions. Returns priority/actions/drivers/evidence_status/status and warnings.
 
-Flow:
+Recommendations require human review. No quantified causal improvement or autonomous mining action is claimed.
 
-```text
-Client
--> route overview()
--> ProductionService.overview()
--> ProductionRepository.get_overview()
--> PredictionOrchestrator.production_prediction(target)
--> ModelRegistry.run("production", ModelInput(target))
--> ProductionOverview
-```
+Contribute explicit rule/evidence definitions and tests. Feature importance alone cannot prove an intervention effect.
 
-Current behavior:
-
-- target is a demo fixture
-- predicted value is generated by the production stub adapter
-- shortfall probability is a fixture
-- risk is derived in the service:
-  - `HIGH` when predicted is below target
-  - `LOW` when predicted reaches/exceeds target
-  - `UNKNOWN` when adapter output is unavailable
-
-Future improvement: connect real production history and use chronological validation. Do not keep the hard-coded shortfall probability once real forecasting begins.
-
-### GET `/api/v1/decision/recommendations`
-
-Purpose: return simple recommendation objects based on current stub production/exploration state.
-
-Route: [decision.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/decision.py)
-
-Service: [decision_service.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/decision_service.py)
-
-Flow:
-
-```text
-Client
--> route recommendations()
--> DecisionService.recommendations()
--> ProductionService.overview()
--> ExplorationService.get_sites()
--> build Recommendations response
-```
-
-Current behavior:
-
-- recommendations are rule-based demo text
-- evidence status is `stub_rule_supported_only`
-- status is `human_review_required`
-- warning says no causal improvement or mining safety claim is made
-
-Why it matters: the decision endpoint proves where recommendations will live without letting frontend pages invent their own business rules.
-
-Future improvement: add a transparent decision policy that consumes validated predictions, operational constraints and human review outcomes. Keep evidence status visible.
-
-### POST `/api/v1/jobs`
-
-Purpose: establish the future contract for long-running work without adding Redis, Celery or a worker yet.
-
-Route: [jobs.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/api/routes/jobs.py)
-
-Service: [job_service.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/services/job_service.py)
-
-Repository: [jobs.py](/home/blixture/PROGRAMMING/HACKATHONS/sih1/moil-intelligence/backend/app/repositories/jobs.py)
-
-Request schema: `JobRequest`
-
-Response schema: `JobRecord`
-
-Example immediate request:
+## POST /api/v1/jobs
 
 ```json
-{
-  "site_id": "zone_a",
-  "task": "exploration_prediction",
-  "complete_immediately": true
-}
+{"site_id":"exp_001","complete_immediately":true}
 ```
 
-Flow when `complete_immediately` is true:
+JobService validates the origin, creates an ID, runs a prediction synchronously if requested, then persists the JobRecord. Returns HTTP 201. Immediate completion is not asynchronous processing.
 
-```text
-Client
--> route create_job(request)
--> JobService.create(request)
--> create queued JobRecord
--> convert JobRequest into ExplorationPredictionRequest
--> PredictionOrchestrator.exploration_prediction(...)
--> set result
--> status = completed
--> JobRepository.save(job)
+complete_immediately=false stores queued; no worker advances it. Records persist across backend restarts. Requests/results are JSONB; relational status supports future polling queries.
+
+Contribute a worker only as a separate staged task with claimed/running/failed/retry semantics and transaction tests. Current job task supports exploration_prediction only; real GEE batch jobs remain future work.
+
+## GET /api/v1/jobs/{job_id}
+
+JobService -> JobRepository.get -> stored JobRecord. Unknown ID returns 404. Frontend refresh polls via HTTP. No WebSockets or background infrastructure are needed for this contract.
+
+## Verification and setup
+
+```bash
+cd backend
+.venv/bin/pytest
+.venv/bin/pytest -m integration
+.venv/bin/alembic upgrade head
+.venv/bin/python scripts/seed_db.py
 ```
 
-Flow when `complete_immediately` is false:
+Ordinary tests override repositories/providers and do not require DB/OAuth. Integration tests exercise real PostGIS geometry, JSONB feature/prediction/job roundtrips and roll back unique test fixtures. Setup details: DB.md and GEE.md.
 
-```text
-Client
--> route create_job(request)
--> JobService.create(request)
--> create queued JobRecord
--> save job
--> queued status remains queued
-```
+## How to add an endpoint
 
-Current limitation: queued jobs do not advance because there is no worker. Records are in memory and reset when the backend restarts.
+Write a concise Pydantic contract, a persistence query if needed, a service method, a DI provider and a thin route. Add tests for legal input, missing data and failure states. Add frontend HTTP use only after the backend contract works. Document source/stub/version/timestamp behavior.
 
-Future improvement: add durable job storage and a worker only when real long-running tasks exist, such as GEE extraction, model training or batch scoring.
-
-### GET `/api/v1/jobs/{job_id}`
-
-Purpose: poll the status of a previously created demo job.
-
-Flow:
-
-```text
-Client
--> route get_job(job_id)
--> JobService.get(job_id)
--> JobRepository.get(job_id)
--> JobRecord or NotFoundError
-```
-
-Future improvement: return durable status, timestamps, progress percentage, retry/error metadata and links to result resources.
-
-## How To Add A New Endpoint Later
-
-Use this checklist:
-
-1. Define request and response schemas in `backend/app/schemas`.
-2. Add or extend a repository/provider/adapter if new data is needed.
-3. Add service logic in `backend/app/services`.
-4. Wire the service in `backend/app/api/dependencies.py` if it is new.
-5. Add a thin route in `backend/app/api/routes`.
-6. Include the route module in `backend/app/api/router.py` if it is new.
-7. Add tests in `backend/tests`.
-8. Update docs and frontend only after the API contract is clear.
-
-Example shape:
-
-```python
-@router.get("/example", response_model=ExampleResponse)
-def example(service: ExampleService = Depends(get_example)) -> ExampleResponse:
-    return service.example()
-```
-
-If the route starts doing filtering, calculations, model selection or database decisions, move that work into a service.
-
-## How To Replace Stubs With Real Pieces
-
-### Replace In-Memory Sites With PostGIS
-
-Keep this call stable:
-
-```python
-ExplorationService.get_sites()
-```
-
-Replace the repository implementation behind it:
-
-```text
-ExplorationRepository.get_sites()
--> currently returns demo list
--> later queries PostGIS
-```
-
-The route and frontend should not need to know whether the source is a list or database query.
-
-### Replace Provider Stubs With GEE/Weather Feature Availability
-
-Current provider methods return `ProviderAvailability`. Keep that typed response, but make the provider inspect materialized feature tables or files later.
-
-Avoid doing live GEE extraction inside a normal HTTP request. The audit expects extraction to be staged and controlled, not hidden inside a user click.
-
-### Replace ML Stubs With Real Adapters
-
-Add a real adapter that follows the same interface as the stub adapters:
-
-```text
-ModelInput
--> adapter.predict(...)
--> ModelResult
-```
-
-Then register it in `ModelRegistry`. The orchestrator should still normalize output into `ExplorationPrediction` or `ProductionOverview`.
-
-Before exposing real predictions, require:
-
-- known model version
-- feature version
-- data timestamp
-- training/evaluation window
-- uncertainty or calibration status
-- validation summary
-- clear warning when evidence is limited
-
-## What To Remember
-
-The backend is built around one simple idea: stable contracts first, real science later.
-
-The frontend should not know how many models exist. It should not know whether data came from memory, PostGIS or GEE. It should call FastAPI and display the response honestly.
-
-The backend should not pretend a stub is a model. It should preserve the shape of the future system while making the current limitations visible.
-
-That discipline is what lets the team build the application layer now and plug in real data/ML later without rewriting every page.
+Never import SQLAlchemy/GEE/ML into route modules. Never construct repositories/providers in routers or business methods. Never make frontend call models directly.

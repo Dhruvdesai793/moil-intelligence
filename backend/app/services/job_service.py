@@ -14,8 +14,10 @@ class JobService:
 
     def create(self, request: JobRequest) -> JobRecord:
         job = JobRecord(job_id=str(uuid4()), status=JobStatus.QUEUED, request=request,
-                        warning="In-memory demo; queued jobs have no worker and never advance. "
-                                "Records reset on restart and oldest records expire after 1000 jobs.")
+                        source="postgresql",
+                        warning="Persisted demo job; queued jobs have no worker and never advance.")
+        if request.site_id:
+            self.orchestrator.exploration.get_site(request.site_id)
         if request.complete_immediately:
             prediction_request = ExplorationPredictionRequest.model_validate(
                 request.model_dump(exclude={"task", "complete_immediately"}))

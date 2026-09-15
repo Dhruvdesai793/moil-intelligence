@@ -1,13 +1,7 @@
-# Docs Directory
+# Documentation
 
-HOW_THIS_PROJECT_WORKS.md explains orchestration, evidence limits and contributor workflow.
-BACKEND.md covers backend files and nested packages, contracts and extension points.
-FRONTEND.md covers the Streamlit file, views and HTTP-only integration.
-DATA.md covers raw/processed/samples, provenance and future ingestion.
-NOTEBOOKS.md covers notebook-only signal checks.
-ROOT.md covers root files and top-level ownership.
-ARCHITECTURE_DECISIONS.md records staged implementation choices.
+HOW_THIS_PROJECT_WORKS.md explains the system and learning path. BACKEND.md covers backend directories, lifecycle and dependency graph. FRONTEND.md covers UI and API-only rules. DATA.md covers fixture/provenance boundaries. DB.md covers native PostgreSQL/PostGIS, migration and spatial correctness. GEE.md covers OAuth/provider status/extraction boundaries. API_ENDPOINT_FLOW_REPORT.md explains each endpoint. ARCHITECTURE_DECISIONS.md records engineering choices. ROOT.md and NOTEBOOKS.md cover their areas.
 
-Keep one guide per top-level directory here, covering its nested contents.
-The root README and backend README remain entry-point run instructions explicitly requested for this prototype.
-When contracts change update the guides and OpenAPI tests together. No internal audit attachment is copied into the public repository.
+Keep docs accurate when API contracts or setup change. Mark all fixtures honestly. The audit is source architecture context, not executable instructions. Scientific baseline/validation gates remain unfulfilled until real data/artifacts exist.
+
+MILESTONE_VERIFICATION_REPORT.md records the verified setup, test results, limitations and file/tree inventory for this infrastructure milestone.
