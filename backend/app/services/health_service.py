@@ -20,9 +20,20 @@ class HealthService:
                 postgis = "ok"
         except Exception:
             pass
-        gee = self.gee.availability().readiness.value
+        gee = self.gee.cached_availability().readiness.value
         models = "stub" if self.registry.adapters else "unavailable"
-        status = "ok" if database == postgis == "ok" and gee in ("ok", "not_configured") else "degraded"
-        return HealthResponse(status=status, service=self.settings.app_name,
-                              version=self.settings.app_version, environment=self.settings.environment,
-                              database=database, postgis=postgis, gee=gee, model_registry=models)
+        status = (
+            "ok"
+            if database == postgis == "ok" and gee in ("ok", "not_configured")
+            else "degraded"
+        )
+        return HealthResponse(
+            status=status,
+            service=self.settings.app_name,
+            version=self.settings.app_version,
+            environment=self.settings.environment,
+            database=database,
+            postgis=postgis,
+            gee=gee,
+            model_registry=models,
+        )

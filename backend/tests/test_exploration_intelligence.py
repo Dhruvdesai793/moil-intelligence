@@ -190,6 +190,33 @@ def test_spectral_reference_measured(context):
     assert reference["sha256_original"]
 
 
+def test_health_and_availability_never_wait_for_google(context, monkeypatch):
+    from app.services.health_service import HealthService
+
+    client, _, _ = context
+    provider = GEEProvider(Settings(gee_enabled=True, _env_file=None))
+
+    def forbidden():
+        raise AssertionError(
+            "Ordinary health/read endpoints must not make live GEE calls"
+        )
+
+    monkeypatch.setattr(provider, "availability", forbidden)
+    app.dependency_overrides[get_gee] = lambda: provider
+    health = HealthService(
+        lambda: (_ for _ in ()).throw(RuntimeError()),
+        provider,
+        ModelRegistry(),
+        Settings(_env_file=None),
+    ).check()
+    assert health.gee == "not_checked"
+    result = client.get("/api/v1/features/sites/zone_a/availability")
+    assert (
+        result.status_code == 200
+        and result.json()["provider"]["readiness"] == "not_checked"
+    )
+
+
 def test_orchestrator_passes_feature_contract_to_adapter(context):
     from app.api.dependencies import get_prediction_repository
 

@@ -16,6 +16,7 @@ class Readiness(StrEnum):
     AUTH_REQUIRED = "auth_required"
     DEGRADED = "degraded"
     NOT_IMPLEMENTED = "not_implemented"
+    NOT_CHECKED = "not_checked"
 
 
 class Metadata(BaseModel):
@@ -23,7 +24,9 @@ class Metadata(BaseModel):
     is_stub: bool = True
     generated_at: datetime = Field(default_factory=utc_now)
     message: str = "Demo only; not scientifically validated."
-    warning: str | None = "Real satellite extraction, validated data and trained models are pending."
+    warning: str | None = (
+        "Validated geology, operational labels and trained models are pending."
+    )
 
 
 class HealthResponse(BaseModel):

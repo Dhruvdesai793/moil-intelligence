@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.dependencies import get_features, get_extractions
 from app.schemas.jobs import JobRecord
+from app.schemas.common import ProviderAvailability
 from app.services.extraction_service import ExtractionService
 from app.schemas.features import (
     FeatureAvailability,
@@ -11,6 +12,11 @@ from app.schemas.features import (
 from app.services.feature_service import FeatureService
 
 router = APIRouter(prefix="/features", tags=["Features"])
+
+
+@router.post("/provider/check", response_model=ProviderAvailability)
+def check_provider(service: FeatureService = Depends(get_features)):
+    return service.check_provider()
 
 
 @router.get("/bundles/{feature_id}", response_model=FeatureBundle)

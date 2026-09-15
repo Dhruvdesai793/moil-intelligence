@@ -31,9 +31,12 @@ class FeatureService:
         self.exploration.get_site(site_id)
         return FeatureAvailability(
             site_id=site_id,
-            provider=self.provider.availability(),
+            provider=self.provider.cached_availability(),
             latest_feature=self.repository.get_latest_for_site(site_id),
         )
+
+    def check_provider(self):
+        return self.provider.availability()
 
     def latest(self, site_id, as_of=None):
         return self.repository.get_latest_for_site(site_id, as_of) if site_id else None

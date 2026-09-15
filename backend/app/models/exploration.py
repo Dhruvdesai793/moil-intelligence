@@ -19,7 +19,7 @@ class ExplorationSite(Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     region: Mapped[str | None] = mapped_column(String(100))
     origin: Mapped[str] = mapped_column(
-        String(32), default="user_location", server_default="demo_fixture"
+        String(32), default="demo_fixture", server_default="demo_fixture"
     )
     notes: Mapped[str | None] = mapped_column(String(2000))
     latitude: Mapped[float] = mapped_column(Float)

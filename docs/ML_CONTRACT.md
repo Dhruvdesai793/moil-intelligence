@@ -15,6 +15,7 @@ Base path: /api/v1. Interactive schema: http://127.0.0.1:8000/docs.
 | GET | /exploration/rankings | Deterministic demo adapter ordering; explicitly not geological likelihood |
 | GET | /exploration/sites/{site_id}/export?format=csv or text | Full candidate and current model-input export |
 | GET | /features/sites/{site_id}/availability | GEE status and latest stored bundle |
+| POST | /features/provider/check | Explicit live GEE readiness smoke check; ordinary reads use cached status |
 | GET | /features/sites/{site_id} | Stored feature history, newest first |
 | GET | /features/bundles/{feature_id} | Immutable stored bundle for prediction lineage |
 | POST | /features/extract | Queue extraction; 202 JobRecord, not a feature response |
@@ -28,6 +29,8 @@ Base path: /api/v1. Interactive schema: http://127.0.0.1:8000/docs.
 | GET | /jobs/{job_id} | Poll extraction/prediction status and result |
 
 No public endpoint calls individual ML models. Models are backend plugins, not frontend services.
+
+Health and ordinary feature-availability reads never wait for Google. GEE readiness is cached for up to five minutes; not_checked means no recent live check, not proof that credentials are missing. Use Check GEE in the frontend or POST /features/provider/check for an explicit live check. The independent worker performs its own readiness check when extracting.
 
 ## Extraction input and response
 

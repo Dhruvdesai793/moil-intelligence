@@ -284,6 +284,11 @@ if page == "Explore":
             availability = api_get("/features/sites/" + selected + "/availability")
             if availability:
                 render_status_pill("GEE: " + availability["provider"]["readiness"])
+            if st.button("Check GEE", icon=":material/cloud_sync:"):
+                checked = api_post("/features/provider/check", {})
+                if checked:
+                    render_status_pill(checked["readiness"])
+                    render_warning(checked["metadata"])
         point = st.session_state.get("map_point", {"lat": 21.65, "lng": 79.6})
         render_section_header("Save a candidate")
         with st.form("new_location", clear_on_submit=False):

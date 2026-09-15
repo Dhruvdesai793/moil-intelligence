@@ -86,6 +86,17 @@ class GEEProvider:
             self._checked_at = monotonic()
             return result.model_copy(deep=True)
 
+    def cached_availability(self) -> ProviderAvailability:
+        if not self.settings.gee_enabled:
+            return self._status(Readiness.NOT_CONFIGURED, "GEE_ENABLED=false.")
+        # Never wait on the initialization lock or remote network in ordinary reads.
+        if self._availability is None or monotonic() - self._checked_at > 300:
+            return self._status(
+                Readiness.NOT_CHECKED,
+                "Provider readiness has not been checked recently. Use Check GEE; stored features remain available.",
+            )
+        return self._availability.model_copy(deep=True)
+
     def _status(self, readiness, warning):
         return ProviderAvailability(
             provider="gee",

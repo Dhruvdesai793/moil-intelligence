@@ -107,4 +107,6 @@ Ordinary tests use fakes and need no live PostgreSQL/GEE. Integration tests requ
 
 DB unavailable: verify service, host authentication and DATABASE_URL. Migration permission denied: run the initial extension migration using an administrator connection; keep the app role ordinary. GEE auth_required: rerun browser authentication in the same OS account/virtual environment. GEE unavailable: verify project approval/API enablement and network. A queued extraction not advancing means the local worker is not running. A failed optional product is reported separately, not filled with invented data. Basemap tiles require network and carry attribution.
 
+Health/availability show cached GEE status without a network dependency. not_checked means no recent API-process smoke check; press Check GEE for a live check. Completed worker measurements are still real even when the independent API-process readiness cache has not been checked.
+
 Real extraction has been smoke-tested locally for exp_001, 2025-01-01 to 2025-04-01; all five product groups returned measured values. Re-run your own smoke check rather than assuming every location/date has coverage.

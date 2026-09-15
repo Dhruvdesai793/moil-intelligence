@@ -53,6 +53,7 @@ def test_postgis_repository_roundtrip():
             session.flush()
             site = ExplorationRepository(session).get(site_id)
             assert site.latitude == 21 and site.status == "ACTIVE"
+            assert site.origin == "demo_fixture" and site.metadata.is_stub
             srid = session.scalar(
                 text("SELECT ST_SRID(geometry) FROM exploration_sites WHERE id=:id"),
                 {"id": site_id},
